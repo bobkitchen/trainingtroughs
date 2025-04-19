@@ -1,42 +1,47 @@
 //
 //  TrainingTroughsApp.swift
-//  TrainingTroughs
-//
-//  FINAL – 19 Apr 2025
 //
 
 import SwiftUI
 
 @main
 struct TrainingTroughsApp: App {
-  // 1. Shared singletons
-  private let intervalsSvc = IntervalsAPIService(
-    apiKey: KeychainHelper.shared.intervalsAPIKey ?? "",
-    athleteID: KeychainHelper.shared.athleteID      ?? ""
-  )
-  private let openAISvc   = OpenAIService(
-    apiKey: KeychainHelper.shared.openAIKey ?? ""
-  )
 
-  // 2. View‑models (created once at launch)
-  @StateObject private var dashboardVM     = DashboardViewModel(service: intervalsSvc)
-  @StateObject private var workoutListVM   = WorkoutListViewModel(service: intervalsSvc)
-  @StateObject private var chatVM          = ChatViewModel(service: openAISvc)
+    // 1. Shared singletons loaded from Keychain
+    private let intervalSvc = IntervalsAPIService(
+        apiKey:  KeychainHelper.shared.intervalsAPIKey ?? "",
+        athleteID: KeychainHelper.shared.athleteID    ?? ""
+    )
+    private let openAISvc = OpenAIService(
+        apiKey: KeychainHelper.shared.openAIKey ?? ""
+    )
 
-  @State private var showSettings = !KeychainHelper.shared.hasAllKeys
+    // 2. View‑models (create after services exist)
+    @StateObject private var dashboardVM   : DashboardViewModel
+    @StateObject private var workoutListVM : WorkoutListViewModel
+    @StateObject private var chatVM        : ChatViewModel
 
-  var body: some Scene {
-    WindowGroup {
-      RootTabView(
-        dashboardVM:   dashboardVM,
-        workoutListVM: workoutListVM,
-        chatVM:        chatVM
-      )
-      .environmentObject(intervalsSvc)
-      .environmentObject(openAISvc)      // if any sub‑view needs it
-      .sheet(isPresented: $showSettings) {
-        SettingsView()
-      }
+    /// Custom init so we can hand the services to the VMs before `@StateObject` wraps them.
+    init() {
+        _dashboardVM   = StateObject(wrappedValue: DashboardViewModel(service: intervalSvc))
+        _workoutListVM = StateObject(wrappedValue: WorkoutListViewModel(service: intervalSvc))
+        _chatVM        = StateObject(wrappedValue: ChatViewModel(service: openAISvc))
     }
-  }
+
+    var body: some Scene {
+        WindowGroup {
+            RootTabView(
+                dashboardVM:   dashboardVM,
+                workoutListVM: workoutListVM,
+                chatVM:        chatVM
+            )
+            .environmentObject(intervalSvc)
+            .environmentObject(openAISvc)          // remove if Chat dropped
+            .sheet(isPresented: $showSettings) {   // edit / validate keys
+                SettingsView()
+            }
+        }
+    }
+
+    @State private var showSettings = !KeychainHelper.shared.hasAllKeys
 }

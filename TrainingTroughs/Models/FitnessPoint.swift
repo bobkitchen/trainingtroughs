@@ -2,16 +2,15 @@
 //  FitnessPoint.swift
 //  TrainingTroughs
 //
+//  One daily CTL/ATL/TSB sample for the trend chart.
+//
 
 import Foundation
 
-/// One point on the CTL / ATL / TSB trend returned by Intervals.icu.
-struct FitnessPoint: Codable, Identifiable {
-    /// `var`, not `let`, so `Codable` can overwrite it when decoding.
-    var id = UUID()
-
-    let date: String           // "yyyy-MM-dd"
-    let ctl:  Double           // Chronic Training Load
-    let atl:  Double           // Acute Training Load
-    let tsb:  Double           // Training Stress Balance
+struct FitnessPoint: Identifiable, Codable, Hashable {
+    let id   = UUID()
+    let date : Date        // ← was String
+    let ctl  : Double
+    let atl  : Double
+    let tsb  : Double
 }

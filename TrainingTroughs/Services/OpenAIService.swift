@@ -2,53 +2,49 @@
 //  OpenAIService.swift
 //  TrainingTroughs
 //
-//  Minimal streaming‑optional wrapper around /v1/chat/completions
+//  Minimal wrapper around OpenAI “chat completions”.
 //
 
 import Foundation
 
-struct ChatMessage: Identifiable, Codable {
-    var id = UUID()
-    let role   : Role
-    let content: String
-    
-    enum Role: String, Codable { case user, assistant }
-    
-    init(role: Role, content: String) {
-        self.role    = role
-        self.content = content
-    }
+struct OpenAIError: Decodable, Error {
+    let message: String
 }
 
-// MARK: - Service
+@MainActor
 final class OpenAIService: ObservableObject {
+
+    private let session = URLSession.shared
     private let apiKey: String
-    
-    init?() {
-        guard let k = KeychainHelper.get("openai_api_key"), !k.isEmpty else { return nil }
-        apiKey = k
-    }
-    
-    /// Blocking one‑shot request (simplest possible)
-    func send(_ userText: String) async throws -> String {
+
+    init(apiKey: String) { self.apiKey = apiKey }
+
+    /// Send a single‑turn prompt, get the assistant’s reply text.
+    func send(_ prompt: String) async throws -> String {
+
         struct Msg: Codable { let role, content: String }
-        struct Req: Codable { let model = "gpt-3.5-turbo", messages: [Msg] }
-        struct Res: Codable {
-            struct Choice: Codable { let message: Msg }
-            let choices: [Choice]
-        }
-        
-        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
-            throw URLError(.badURL)
-        }
-        var req = URLRequest(url: url)
+        struct Req:  Codable { let model: String, messages: [Msg] }
+        struct Choice: Decodable { let message: Msg }
+        struct Res:    Decodable { let choices: [Choice] }
+
+        let body = try JSONEncoder().encode(
+            Req(model: "gpt-3.5-turbo",
+                messages: [.init(role: "user", content: prompt)]))
+
+        var req = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
         req.httpMethod = "POST"
-        req.setValue("Bearer \(apiKey)",      forHTTPHeaderField: "Authorization")
-        req.setValue("application/json",      forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONEncoder().encode( Req(messages: [.init(role: "user", content: userText)]) )
-        
-        let (data, _) = try await URLSession.shared.data(for: req)
-        let res = try JSONDecoder().decode(Res.self, from: data)
-        return res.choices.first?.message.content ?? ""
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json",   forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+
+        let (data, resp) = try await session.data(for: req)
+
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            if let err = try? JSONDecoder().decode(OpenAIError.self, from: data) {
+                throw err
+            }
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(Res.self, from: data).choices.first?.message.content ?? ""
     }
 }
