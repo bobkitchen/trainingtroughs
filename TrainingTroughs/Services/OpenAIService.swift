@@ -2,51 +2,53 @@
 //  OpenAIService.swift
 //  TrainingTroughs
 //
-//  Created by Bob Kitchen on 4/18/25.
-//
-
-
-//  OpenAIService.swift
-//  TrainingTroughs
-//
-//  Created by ChatGPT on 4/18/25.
+//  Minimal streaming‑optional wrapper around /v1/chat/completions
 //
 
 import Foundation
 
-@MainActor
-class OpenAIService {
-  private let apiKey: String
-  private let decoder = JSONDecoder()
-  private let encoder = JSONEncoder()
-
-  init(apiKey: String) {
-    self.apiKey = apiKey
-  }
-
-  /// Sends a prompt to OpenAI and returns the assistant’s reply text.
-  func send(prompt: String) async throws -> String {
-    let url = URL(string: "https://api.openai.com/v1/completions")!
-    var req = URLRequest(url: url)
-    req.httpMethod = "POST"
-    req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-    // you can tweak model, max_tokens, etc.
-    struct Body: Encodable {
-      let model = "text-davinci-003"
-      let prompt: String
-      let max_tokens = 512
-      let temperature = 0.7
+struct ChatMessage: Identifiable, Codable {
+    var id = UUID()
+    let role   : Role
+    let content: String
+    
+    enum Role: String, Codable { case user, assistant }
+    
+    init(role: Role, content: String) {
+        self.role    = role
+        self.content = content
     }
+}
 
-    req.httpBody = try encoder.encode(Body(prompt: prompt))
-
-    let (data, response) = try await URLSession.shared.data(for: req)
-    guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-      throw URLError(.badServerResponse)
+// MARK: - Service
+final class OpenAIService: ObservableObject {
+    private let apiKey: String
+    
+    init?() {
+        guard let k = KeychainHelper.get("openai_api_key"), !k.isEmpty else { return nil }
+        apiKey = k
     }
-    let openAI = try decoder.decode(OpenAIResponse.self, from: data)
-    return openAI.choices.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-  }
+    
+    /// Blocking one‑shot request (simplest possible)
+    func send(_ userText: String) async throws -> String {
+        struct Msg: Codable { let role, content: String }
+        struct Req: Codable { let model = "gpt-3.5-turbo", messages: [Msg] }
+        struct Res: Codable {
+            struct Choice: Codable { let message: Msg }
+            let choices: [Choice]
+        }
+        
+        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(apiKey)",      forHTTPHeaderField: "Authorization")
+        req.setValue("application/json",      forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode( Req(messages: [.init(role: "user", content: userText)]) )
+        
+        let (data, _) = try await URLSession.shared.data(for: req)
+        let res = try JSONDecoder().decode(Res.self, from: data)
+        return res.choices.first?.message.content ?? ""
+    }
 }

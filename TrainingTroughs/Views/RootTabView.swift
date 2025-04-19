@@ -2,37 +2,41 @@
 //  RootTabView.swift
 //  TrainingTroughs
 //
-//  Dashboard • Workouts (split) • Chat – selection‑binding flow
+//  Dashboard (CTL/ATL), Workouts master–detail, Chat
 //
 
 import SwiftUI
 
 struct RootTabView: View {
 
-    @StateObject var dashboardVM:   DashboardViewModel
-    @StateObject var workoutListVM: WorkoutListViewModel
-    @StateObject var chatVM:        ChatViewModel
+    @ObservedObject var dashboardVM  : DashboardViewModel
+    @ObservedObject var workoutListVM: WorkoutListViewModel
+    @ObservedObject var chatVM       : ChatViewModel        // delete if unused
 
-    // current row selected in the split view
+    // Selection shared by the split view
     @State private var selectedWorkout: Workout?
 
     var body: some View {
         TabView {
 
-            // Dashboard ----------------------------------------------------
+            // ── Dashboard tab ────────────────────────────────────────────────
             NavigationStack {
                 DashboardView(viewModel: dashboardVM)
             }
             .tabItem { Label("Dashboard", systemImage: "chart.line.uptrend.xyaxis") }
 
-            // Workouts (master–detail) ------------------------------------
+            // ── Workouts (master–detail) tab ────────────────────────────────
             NavigationSplitView {
 
-                WorkoutListView(viewModel: workoutListVM,
-                                selection: $selectedWorkout)
+                // Master list
+                WorkoutListView(
+                    viewModel : workoutListVM,
+                    selection : $selectedWorkout
+                )
 
             } detail: {
 
+                // Detail column bound to the same selection
                 if let w = selectedWorkout {
                     WorkoutDetailView(workout: w)
                 } else {
@@ -41,11 +45,11 @@ struct RootTabView: View {
                 }
             }
             .navigationSplitViewStyle(.balanced)
-            .tabItem { Label("Workouts", systemImage: "figure.walk") }
+            .tabItem { Label("Workouts", systemImage: "list.bullet") }
 
-            // Chat ---------------------------------------------------------
+            // ── Chat tab (optional) ─────────────────────────────────────────
             NavigationStack {
-                ChatView(chatVM: chatVM)
+                ChatView(chatVM: chatVM)           // **label is `chatVM` now**
             }
             .tabItem { Label("Chat", systemImage: "message") }
         }
