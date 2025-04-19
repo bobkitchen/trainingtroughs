@@ -2,76 +2,53 @@
 //  CSVWorkoutParser.swift
 //  TrainingTroughs
 //
-//  Parses Intervals activities.csv into [Workout]   (21 Apr 2025)
+//  Parses activities.csv returned by Intervals.icu
 //
 
 import Foundation
 
 enum CSVWorkoutParser {
 
+    /// Convert Intervals activities.csv ➞ [Workout]
     static func parse(_ csv: String) throws -> [Workout] {
 
-        // strip UTF‑8 BOM if present
-        var text = csv
-        if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
+        // remove BOM if present
+        var txt = csv
+        if txt.hasPrefix("\u{FEFF}") { txt.removeFirst() }
 
-        var lines = text.split(separator:"\n").map(String.init)
+        var lines = txt.split(separator:"\n").map(String.init)
         guard !lines.isEmpty else { return [] }
 
+        // delimiter is always ',' for activities.csv
         let header = lines.removeFirst().split(separator:",").map(String.init)
         func col(_ name:String)->Int?{ header.firstIndex(of:name) }
 
-        // mandatory columns
         guard
             let iDate  = col("start_date_local"),
             let iName  = col("name"),
-            let iSport = col("type")
+            let iSport = col("type"),              // "Ride","Run", etc.
+            let iDur   = col("elapsed_time"),      // seconds
+            let iLoad  = col("icu_training_load"),
+            let iInt   = col("icu_intensity")
         else { throw ServiceError.csvParsing }
 
-        // optional columns
-        let iElapsed = col("elapsed_time")
-        let iMoving  = col("moving_time")
-        let iLoad    = col("icu_training_load")
-        let iInt     = col("icu_intensity")
-
-        // formatters
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let plain = DateFormatter()
-        plain.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        plain.timeZone   = .current
-
-        func d2(_ s:String) -> Double {
-            Double(s.replacingOccurrences(of:",", with:".")) ?? 0
-        }
 
         return lines.compactMap { row -> Workout? in
             let c = row.split(separator:",", omittingEmptySubsequences:false)
                         .map(String.init)
-            guard c.count > iSport else { return nil }
-
-            // date
-            let dateStr = c[iDate]
-            guard let when = iso.date(from: dateStr) ?? plain.date(from: dateStr)
-            else { return nil }
-
-            // duration (prefer elapsed_time, else moving_time)
-            var dur = 0.0
-            if let idx = iElapsed, !c[idx].isEmpty { dur = d2(c[idx]) }
-            else if let idx = iMoving, !c[idx].isEmpty { dur = d2(c[idx]) }
-
-            let load = iLoad.map { d2(c[$0]) } ?? 0
-            let inten = iInt.map { d2(c[$0]) } ?? 0
+            guard c.count > max(iDate,iName,iSport,iDur,iLoad,iInt) else { return nil }
+            guard let when = iso.date(from:c[iDate]) else { return nil }
 
             return Workout(
                 id:       UUID().uuidString,
                 date:     when,
                 name:     c[iName],
                 sport:    c[iSport],
-                duration: TimeInterval(dur),
-                tss:      load,
-                intensity: inten
+                duration: TimeInterval(Double(c[iDur]) ?? 0),
+                tss:      Double(c[iLoad]) ?? 0,   // Intervals calls it "training load"
+                intensity: Double(c[iInt]) ?? 0
             )
         }
     }
