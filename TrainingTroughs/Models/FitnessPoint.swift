@@ -9,8 +9,8 @@ import Foundation
 
 struct FitnessPoint: Identifiable, Codable, Hashable {
     let id   = UUID()
-    let date : Date        // ← was String
-    let ctl  : Double
-    let atl  : Double
-    let tsb  : Double
+    let date: Date           // ← no default value; Codable can decode
+    let ctl : Double
+    let atl : Double
+    let tsb : Double
 }

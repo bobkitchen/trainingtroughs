@@ -2,8 +2,6 @@
 //  WorkoutDetailViewModel.swift
 //  TrainingTroughs
 //
-//  Re‑written 19 Apr 2025 – fixes actor‑isolation & duplicate symbol issues
-//
 
 import Foundation
 import SwiftUI
@@ -11,26 +9,25 @@ import SwiftUI
 @MainActor
 final class WorkoutDetailViewModel: ObservableObject {
 
-    // MARK: – Published state
+    // MARK: published state
     @Published var activity: Workout
-    @Published var detail:   ActivityDetail?
+    @Published var detail  : ActivityDetail?
 
-    // MARK: – Dependencies
+    // MARK: dependency
     private let service: IntervalsAPIService
 
-    /// Designated initialiser – inject service (nice for previews / tests)
+    // designated initializer (used by previews/tests)
     init(activity: Workout, service: IntervalsAPIService) {
         self.activity = activity
         self.service  = service
     }
 
-    /// Convenience initialiser – the app will call this one
+    // convenience for main app
     convenience init(activity: Workout) {
-        self.init(activity: activity, service: .shared)
+        self.init(activity: activity, service: .shared)     // ← uses singleton
     }
 
-    // MARK: – Public API
-    /// Fetches the per‑activity JSON detail and publishes it.
+    // MARK: Public
     func load() async {
         do {
             detail = try await service.fetchActivityDetail(id: activity.id)

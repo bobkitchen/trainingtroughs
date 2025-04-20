@@ -1,29 +1,19 @@
-//
-//  DashboardViewModel.swift
-//  TrainingTroughs
-//
-//  Requests 90 days and skips zero rows.
-//  19 Apr 2025
-//
-
-import Foundation
+import SwiftUI
 
 @MainActor
 final class DashboardViewModel: ObservableObject {
 
-    @Published var fitnessPoints: [FitnessPoint] = []
-    @Published var currentCTL:  Double = 0
-    @Published var currentATL:  Double = 0
-    @Published var currentTSB:  Double = 0
-    @Published var errorMessage: String?
+    // MARK: – Published state
+    @Published var fitnessPoints:[FitnessPoint] = []
+    @Published var currentCTL : Double = 0
+    @Published var currentATL : Double = 0
+    @Published var currentTSB : String = "0"
 
+    // MARK: – Dependency
     private let service: IntervalsAPIService
+    init(service: IntervalsAPIService = .shared) { self.service = service }
 
-    init(service: IntervalsAPIService) {
-        self.service = service
-    }
-
-    /// Pulls CTL/ATL/TSB history (90 days) and updates UI.
+    // MARK: – Public API
     func refreshFitness(days: Int = 90) async {
         do {
             let points = try await service.fetchFitnessTrend(days: days)
@@ -32,10 +22,10 @@ final class DashboardViewModel: ObservableObject {
             if let latest = points.first {
                 currentCTL = latest.ctl
                 currentATL = latest.atl
-                currentTSB = latest.tsb
+                currentTSB = String(format: "%.1f", latest.tsb)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            print("⚠️ Dashboard refresh failed:", error)
         }
     }
 }
